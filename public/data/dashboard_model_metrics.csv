@@ -1,0 +1,8 @@
+Model,MAE,RMSE,MAPE,Store_id,Product_id,Forecast_Frequency,Forecast_Horizon,Run_Timestamp
+Naive,28.88,32.83,23.95,S001,P001,weekly,8,2026-06-04 10:16:08.658564
+Moving Average,28.12,31.85,23.25,S001,P001,weekly,8,2026-06-04 10:16:08.658564
+Seasonal Naive,17.38,21.83,12.85,S001,P001,weekly,8,2026-06-04 10:16:08.658564
+Trend,35.22,41.5,29.72,S001,P001,weekly,8,2026-06-04 10:16:08.658564
+Ensemble,24.6,27.87,20.23,S001,P001,weekly,8,2026-06-04 10:16:08.658564
+Spark Linear Regression,19.58,22.7,15.48,S001,P001,weekly,8,2026-06-04 10:16:08.658564
+Spark Random Forest,14.48,15.44,10.73,S001,P001,weekly,8,2026-06-04 10:16:08.658564
