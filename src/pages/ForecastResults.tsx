@@ -99,6 +99,9 @@ export default function ForecastResults() {
   const setProduct = (v: string) => { setProductFilter(v); setPage(1); setBtPage(1) }
   const setFreq    = (v: string) => { setFreqFilter(v);    setPage(1); setBtPage(1) }
 
+  const filtersActive = storeFilter !== 'S001' || productFilter !== 'P001' || freqFilter !== 'weekly'
+  const handleReset   = () => { setStore('S001'); setProduct('P001'); setFreq('weekly') }
+
   // ── Filtered slices ───────────────────────────────────
   const filtered = useMemo(
     () => forecastData.filter(
@@ -349,7 +352,18 @@ export default function ForecastResults() {
           </select>
         </div>
 
-        <div className="ml-auto flex gap-3 flex-wrap">
+        <div className="ml-auto flex gap-3 flex-wrap items-center">
+          <button
+            onClick={handleReset}
+            className={`flex items-center gap-1.5 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-200 ${
+              filtersActive
+                ? 'text-primary opacity-100 cursor-pointer hover:opacity-75'
+                : 'text-on-surface-variant opacity-20 pointer-events-none'
+            }`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>restart_alt</span>
+            Reset
+          </button>
           <button
             className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold text-sm transition-transform active:scale-95"
             style={{ boxShadow: '0 4px 12px rgba(231,109,87,0.3)' }}

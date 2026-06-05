@@ -69,6 +69,9 @@ export default function ModelPerformance() {
     [metricsData, storeFilter, productFilter, freqFilter]
   )
 
+  const filtersActive = storeFilter !== 'S001' || productFilter !== 'P001' || freqFilter !== 'weekly'
+  const handleReset   = () => { setStoreFilter('S001'); setProductFilter('P001'); setFreqFilter('weekly') }
+
   const sortedByMAE  = useMemo(() => [...filtered].sort((a, b) => a.MAE  - b.MAE),  [filtered])
   const sortedByRMSE = useMemo(() => [...filtered].sort((a, b) => a.RMSE - b.RMSE), [filtered])
   const sortedByMAPE = useMemo(() => [...filtered].sort((a, b) => a.MAPE - b.MAPE), [filtered])
@@ -150,6 +153,19 @@ export default function ModelPerformance() {
                 ))}
               </select>
             </div>
+
+            {/* Reset filters */}
+            <button
+              onClick={handleReset}
+              className={`flex items-center gap-1.5 self-end pb-2 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-200 ${
+                filtersActive
+                  ? 'text-primary opacity-100 cursor-pointer hover:opacity-75'
+                  : 'text-on-surface-variant opacity-20 pointer-events-none'
+              }`}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }}>restart_alt</span>
+              Reset
+            </button>
           </div>
         </div>
 
@@ -231,6 +247,7 @@ export default function ModelPerformance() {
               <span className="text-sm text-on-surface-variant ml-1">Weeks</span>
             </div>
           </div>
+
         </div>
       </section>
 

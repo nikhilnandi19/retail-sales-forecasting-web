@@ -76,6 +76,9 @@ export default function Overview() {
         : `${yearOf(minDate)}–${yearOf(maxDate)}`
       : '—'
 
+  const filtersActive = storeFilter !== 'All' || productFilter !== 'All'
+  const handleReset   = () => { handleStore('All'); handleProduct('All') }
+
   // ── Top 10 bar chart ───────────────────────────────────
   const top10 = useMemo(
     () =>
@@ -177,6 +180,19 @@ export default function Overview() {
               </span>
             </div>
           </div>
+
+          {/* Reset filters */}
+          <button
+            onClick={handleReset}
+            className={`flex items-center gap-1.5 self-end pb-2 text-[11px] font-bold tracking-[0.05em] uppercase transition-colors duration-200 ${
+              filtersActive
+                ? 'text-primary opacity-100 cursor-pointer hover:opacity-75'
+                : 'text-on-surface-variant opacity-20 pointer-events-none'
+            }`}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }}>restart_alt</span>
+            Reset
+          </button>
         </div>
       </header>
 
