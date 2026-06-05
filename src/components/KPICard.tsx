@@ -1,20 +1,28 @@
-// Stitch "Warm Glass Analytics" KPI card
+import AnimatedNumber from './AnimatedNumber'
+
 interface Props {
-  /** Material Symbol icon name */
   icon: string
-  /** Tailwind bg class for the icon pill, e.g. "bg-primary-container/10" */
   iconBg: string
-  /** Tailwind text class for the icon color, e.g. "text-primary" */
   iconColor: string
-  /** Optional small badge text (e.g. "+12.4%") */
   badge?: string
   label: string
-  value: string
+  /** Plain text value (non-numeric). Fades on change via React key. */
+  value?: string
+  /** Numeric value — triggers AnimatedNumber counter instead of static text. */
+  rawValue?: number
+  decimals?: number
+  compact?: boolean
+  /** Suffix appended after the animated number (e.g. "%" or "K"). */
+  numSuffix?: string
   unit?: string
   description: string
 }
 
-export default function KPICard({ icon, iconBg, iconColor, badge, label, value, unit, description }: Props) {
+export default function KPICard({
+  icon, iconBg, iconColor, badge,
+  label, value, rawValue, decimals = 2, compact = false, numSuffix = '',
+  unit, description,
+}: Props) {
   return (
     <div className="glass-card p-6 rounded-xl hover:border-primary-container/40 transition-all group cursor-default">
       {/* Icon row */}
@@ -37,11 +45,25 @@ export default function KPICard({ icon, iconBg, iconColor, badge, label, value, 
         {label}
       </h3>
 
-      {/* Value */}
+      {/* Value — animated if rawValue provided, fading text otherwise */}
       <div className="flex items-baseline gap-2">
-        <span className="text-[24px] font-semibold leading-8 tracking-tight text-on-surface">
-          {value}
-        </span>
+        {rawValue !== undefined ? (
+          <AnimatedNumber
+            value={rawValue}
+            decimals={decimals}
+            compact={compact}
+            suffix={numSuffix}
+            className="text-[24px] font-semibold leading-8 tracking-tight text-on-surface"
+          />
+        ) : (
+          // key forces remount → CSS animation plays on every value change
+          <span
+            key={value}
+            className="text-[24px] font-semibold leading-8 tracking-tight text-on-surface animate-fade-in"
+          >
+            {value ?? '—'}
+          </span>
+        )}
         {unit && (
           <span className="text-sm text-on-surface-variant/60">{unit}</span>
         )}

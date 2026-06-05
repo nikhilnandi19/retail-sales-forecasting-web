@@ -9,6 +9,7 @@ import {
 } from '../utils/csvLoader'
 import type { ForecastOutput, ActualVsForecast, ModelMetrics, BacktestOutput } from '../types'
 import { fmtNum, fmtDateShort, unique } from '../utils/formatters'
+import AnimatedNumber from '../components/AnimatedNumber'
 
 // ── Status computation ────────────────────────────────────
 function confidenceStatus(value: number, mean: number, std: number): string {
@@ -282,31 +283,12 @@ export default function ForecastResults() {
       {/* ── KPI row ────────────────────────────────────── */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {([
-          {
-            label: 'Backtest MAE',
-            icon: 'target',
-            value: fmtNum(backtestMAE),
-            sub: 'Avg absolute error (8-week holdout)',
-          },
-          {
-            label: 'Backtest MAPE',
-            icon: 'percent',
-            value: `${fmtNum(backtestMAPE)}%`,
-            sub: 'Avg % error vs actual sales',
-          },
-          {
-            label: 'Forecast Horizon',
-            icon: 'event_note',
-            value: `${horizon}`,
-            sub: 'Weeks ahead',
-          },
-          {
-            label: 'Total Forecasted Sales',
-            icon: 'analytics',
-            value: totalEnsemble.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-            sub: 'Aggregate ensemble units',
-          },
-        ] as const).map(({ label, icon, value, sub }) => (
+          { label: 'Backtest MAE',           icon: 'target',     rawValue: backtestMAE,   decimals: 2, suffix: '',  compact: false, sub: 'Avg absolute error (8-week holdout)' },
+          { label: 'Backtest MAPE',          icon: 'percent',    rawValue: backtestMAPE,  decimals: 2, suffix: '%', compact: false, sub: 'Avg % error vs actual sales' },
+          { label: 'Forecast Horizon',       icon: 'event_note', rawValue: horizon,       decimals: 0, suffix: '',  compact: false, sub: 'Weeks ahead' },
+          { label: 'Total Forecasted Sales', icon: 'analytics',  rawValue: totalEnsemble, decimals: 2, suffix: '',  compact: true,  sub: 'Aggregate ensemble units' },
+        ] satisfies { label: string; icon: string; rawValue: number; decimals: number; suffix: string; compact: boolean; sub: string }[])
+        .map(({ label, icon, rawValue, decimals, suffix, compact, sub }) => (
           <div key={label} className="glass-card p-6 rounded-xl flex flex-col justify-between h-[140px]">
             <div className="flex justify-between items-start">
               <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant">
@@ -315,9 +297,13 @@ export default function ForecastResults() {
               <span className="material-symbols-outlined text-primary" style={{ fontSize: 22 }}>{icon}</span>
             </div>
             <div className="space-y-1">
-              <span className="text-[24px] font-semibold leading-8 tracking-tight text-on-background block">
-                {value}
-              </span>
+              <AnimatedNumber
+                value={rawValue}
+                decimals={decimals}
+                suffix={suffix}
+                compact={compact}
+                className="text-[24px] font-semibold leading-8 tracking-tight text-on-background block"
+              />
               <p className="text-on-surface-variant/70 text-xs">{sub}</p>
             </div>
           </div>

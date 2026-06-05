@@ -188,7 +188,9 @@ export default function Overview() {
           iconColor="text-primary"
           badge="+12.4%"
           label="Total Sales"
-          value={fmtSales(totalSales)}
+          rawValue={totalSales}
+          compact
+          decimals={2}
           unit="USD"
           description="Aggregate performance across all global outlets."
         />
@@ -197,7 +199,8 @@ export default function Overview() {
           iconBg="bg-secondary/10"
           iconColor="text-secondary"
           label="Avg Daily Sales"
-          value={fmtNum(avgDaily)}
+          rawValue={avgDaily}
+          decimals={2}
           unit="Units"
           description="Mean unit distribution per operating cycle."
         />
@@ -206,7 +209,8 @@ export default function Overview() {
           iconBg="bg-tertiary/10"
           iconColor="text-tertiary"
           label="Store-Product Pairs"
-          value={pairCount.toString()}
+          rawValue={pairCount}
+          decimals={0}
           unit="Active SKU/Loc"
           description="Mapped distribution (10 stores × 50 products)."
         />

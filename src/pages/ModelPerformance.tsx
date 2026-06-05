@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { loadModelMetrics } from '../utils/csvLoader'
 import type { ModelMetrics } from '../types'
 import { fmtNum, unique } from '../utils/formatters'
+import AnimatedNumber from '../components/AnimatedNumber'
 
 // ── Model type badge mapping ──────────────────────────────
 const MODEL_TYPE: Record<string, { label: string; cls: string }> = {
@@ -155,7 +156,7 @@ export default function ModelPerformance() {
         {/* ── 4 KPI Cards ──────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
 
-          {/* Best Model by MAE */}
+          {/* Best Model by MAE — text value fades on filter change via key */}
           <div className="glass-card p-6 rounded-xl flex flex-col justify-between min-h-[120px]">
             <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant">
               Best Model by MAE
@@ -165,7 +166,10 @@ export default function ModelPerformance() {
                 <span className="text-on-surface-variant/50 text-sm">No data</span>
               ) : (
                 <>
-                  <span className="text-[18px] font-semibold leading-6 block text-on-surface">
+                  <span
+                    key={bestModel.Model}
+                    className="text-[18px] font-semibold leading-6 block text-on-surface animate-fade-in"
+                  >
                     {bestModel.Model}
                   </span>
                   <div className="mt-2">
@@ -184,9 +188,11 @@ export default function ModelPerformance() {
               Lowest MAE
             </span>
             <div className="mt-4 flex items-baseline gap-2 flex-wrap">
-              <span className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-surface">
-                {fmtNum(lowestMAE)}
-              </span>
+              <AnimatedNumber
+                value={lowestMAE}
+                decimals={2}
+                className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-surface"
+              />
               <span className="text-tertiary font-medium text-sm flex items-center gap-0.5">
                 <span className="material-symbols-outlined" style={{ fontSize: 16 }}>trending_down</span>
                 -2.4%
@@ -200,9 +206,11 @@ export default function ModelPerformance() {
               Lowest RMSE
             </span>
             <div className="mt-4">
-              <span className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-surface">
-                {fmtNum(lowestRMSE)}
-              </span>
+              <AnimatedNumber
+                value={lowestRMSE}
+                decimals={2}
+                className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-surface"
+              />
             </div>
           </div>
 
@@ -215,9 +223,11 @@ export default function ModelPerformance() {
               Forecast Horizon
             </span>
             <div className="mt-4">
-              <span className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-surface">
-                {horizon}
-              </span>
+              <AnimatedNumber
+                value={horizon}
+                decimals={0}
+                className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-surface"
+              />
               <span className="text-sm text-on-surface-variant ml-1">Weeks</span>
             </div>
           </div>
