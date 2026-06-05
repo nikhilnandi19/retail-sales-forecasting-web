@@ -43,3 +43,22 @@ export interface ActualVsForecast {
   Type: string
   Forecast_Method: string
 }
+
+export interface BacktestOutput {
+  Store_id: string
+  Product_id: string
+  Forecast_Frequency: string
+  Backtest_Date: string
+  Actual_Sales: number
+  Naive_Backtest: number
+  Moving_Average_Backtest: number
+  Seasonal_Naive_Backtest: number
+  Trend_Backtest: number
+  Linear_Regression_Backtest: number
+  Random_Forest_Backtest: number
+  Enhanced_Ensemble_Backtest: number
+  Ensemble_Absolute_Error: number
+  Ensemble_Percent_Error: number
+  Backtest_Horizon: number
+  Run_Timestamp: string
+}

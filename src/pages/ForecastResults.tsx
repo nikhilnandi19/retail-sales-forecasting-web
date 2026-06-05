@@ -3,8 +3,11 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, ReferenceArea,
 } from 'recharts'
-import { loadForecastOutput, loadActualVsForecast, loadModelMetrics } from '../utils/csvLoader'
-import type { ForecastOutput, ActualVsForecast, ModelMetrics } from '../types'
+import {
+  loadForecastOutput, loadActualVsForecast,
+  loadModelMetrics, loadBacktestOutput,
+} from '../utils/csvLoader'
+import type { ForecastOutput, ActualVsForecast, ModelMetrics, BacktestOutput } from '../types'
 import { fmtNum, fmtDateShort, unique } from '../utils/formatters'
 
 // ── Status computation ────────────────────────────────────
@@ -19,6 +22,12 @@ const STATUS_STYLE: Record<string, { pill: string; dot: string }> = {
   'High Confidence':   { pill: 'bg-tertiary-fixed/40 text-on-tertiary-fixed-variant', dot: 'bg-tertiary' },
   'Medium Confidence': { pill: 'bg-secondary-container/40 text-on-secondary-container', dot: 'bg-secondary' },
   'Anomaly Detected':  { pill: 'bg-error-container/40 text-on-error-container', dot: 'bg-error' },
+}
+
+function mapeLabel(mape: number): { text: string; cls: string } {
+  if (mape < 15) return { text: 'Strong accuracy', cls: 'text-tertiary font-bold' }
+  if (mape < 25) return { text: 'Moderate accuracy', cls: 'text-secondary font-bold' }
+  return { text: 'High forecast error', cls: 'text-error font-bold' }
 }
 
 // ── Chart tooltip ─────────────────────────────────────────
@@ -48,26 +57,34 @@ function ChartTooltip({ active, payload, label }: any) {
 const PAGE_SIZE = 8
 
 export default function ForecastResults() {
-  const [forecastData, setForecastData] = useState<ForecastOutput[]>([])
-  const [avfData,      setAvfData]      = useState<ActualVsForecast[]>([])
-  const [metricsData,  setMetricsData]  = useState<ModelMetrics[]>([])
-  const [loading,      setLoading]      = useState(true)
+  const [forecastData,  setForecastData]  = useState<ForecastOutput[]>([])
+  const [avfData,       setAvfData]       = useState<ActualVsForecast[]>([])
+  const [metricsData,   setMetricsData]   = useState<ModelMetrics[]>([])
+  const [backtestData,  setBacktestData]  = useState<BacktestOutput[]>([])
+  const [loading,       setLoading]       = useState(true)
 
   const [storeFilter,   setStoreFilter]   = useState('S001')
   const [productFilter, setProductFilter] = useState('P001')
   const [freqFilter,    setFreqFilter]    = useState('weekly')
-  const [searchTerm,    setSearchTerm]    = useState('')
-  const [page,          setPage]          = useState(1)
+
+  // Forecast Output table state
+  const [searchTerm, setSearchTerm] = useState('')
+  const [page,       setPage]       = useState(1)
+
+  // Backtest table state
+  const [btPage, setBtPage] = useState(1)
 
   useEffect(() => {
     Promise.all([
       loadForecastOutput(),
       loadActualVsForecast(),
       loadModelMetrics(),
-    ]).then(([forecast, avf, metrics]) => {
+      loadBacktestOutput(),
+    ]).then(([forecast, avf, metrics, backtest]) => {
       setForecastData(forecast)
       setAvfData(avf)
       setMetricsData(metrics)
+      setBacktestData(backtest)
       setLoading(false)
     })
   }, [])
@@ -77,9 +94,9 @@ export default function ForecastResults() {
   const products = useMemo(() => unique(forecastData.map((d) => d.Product_id)).sort(), [forecastData])
   const freqs    = useMemo(() => unique(forecastData.map((d) => d.Forecast_Frequency)).sort(), [forecastData])
 
-  const setStore   = (v: string) => { setStoreFilter(v);   setPage(1) }
-  const setProduct = (v: string) => { setProductFilter(v); setPage(1) }
-  const setFreq    = (v: string) => { setFreqFilter(v);    setPage(1) }
+  const setStore   = (v: string) => { setStoreFilter(v);   setPage(1); setBtPage(1) }
+  const setProduct = (v: string) => { setProductFilter(v); setPage(1); setBtPage(1) }
+  const setFreq    = (v: string) => { setFreqFilter(v);    setPage(1); setBtPage(1) }
 
   // ── Filtered slices ───────────────────────────────────
   const filtered = useMemo(
@@ -103,34 +120,63 @@ export default function ForecastResults() {
     [metricsData, storeFilter, productFilter, freqFilter]
   )
 
-  // ── KPIs ──────────────────────────────────────────────
-  const horizon      = filteredMetrics.length > 0 ? filteredMetrics[0].Forecast_Horizon : 8
-  const freq         = filtered.length > 0 ? filtered[0].Forecast_Frequency : freqFilter
-  const avgEnsemble  = filtered.length > 0
-    ? filtered.reduce((s, d) => s + (d.Enhanced_Ensemble_Forecast || 0), 0) / filtered.length
-    : 0
+  const filteredBacktest = useMemo(
+    () => backtestData.filter(
+      (d) => d.Store_id === storeFilter && d.Product_id === productFilter && d.Forecast_Frequency === freqFilter
+    ),
+    [backtestData, storeFilter, productFilter, freqFilter]
+  )
+
+  // ── Backtest KPIs ─────────────────────────────────────
+  const backtestMAE = useMemo(() => {
+    if (filteredBacktest.length === 0) return 0
+    return filteredBacktest.reduce((s, d) => s + (d.Ensemble_Absolute_Error || 0), 0) / filteredBacktest.length
+  }, [filteredBacktest])
+
+  const backtestMAPE = useMemo(() => {
+    if (filteredBacktest.length === 0) return 0
+    return filteredBacktest.reduce((s, d) => s + (d.Ensemble_Percent_Error || 0), 0) / filteredBacktest.length
+  }, [filteredBacktest])
+
+  // ── Future forecast KPIs ──────────────────────────────
+  const horizon       = filteredMetrics.length > 0 ? filteredMetrics[0].Forecast_Horizon : filtered.length || 8
   const totalEnsemble = filtered.reduce((s, d) => s + (d.Enhanced_Ensemble_Forecast || 0), 0)
 
-  // ── Actual vs Forecast chart ──────────────────────────
-  const avfChartData = useMemo(() => {
-    const actualMap: Record<string, number>   = {}
-    const forecastMap: Record<string, number> = {}
+  // ── Combined chart: actual + backtest + future ────────
+  const combinedChartData = useMemo(() => {
+    const actualMap:   Record<string, number> = {}
+    const backtestMap: Record<string, number> = {}
+    const futureMap:   Record<string, number> = {}
+
     filteredAvf.forEach((d) => {
-      const key = fmtDateShort(d.Date)
-      if (d.Type === 'Actual') actualMap[key]   = d.Sales
-      else                     forecastMap[key] = d.Sales
+      if (d.Type === 'Actual') actualMap[fmtDateShort(d.Date)] = d.Sales
     })
-    const allDates = [...new Set(filteredAvf.map((d) => fmtDateShort(d.Date)))].sort()
+    filteredBacktest.forEach((d) => {
+      backtestMap[fmtDateShort(d.Backtest_Date)] = d.Enhanced_Ensemble_Backtest
+    })
+    ;[...filtered]
+      .sort((a, b) => a.Forecast_Date.localeCompare(b.Forecast_Date))
+      .forEach((d) => {
+        futureMap[fmtDateShort(d.Forecast_Date)] = d.Enhanced_Ensemble_Forecast
+      })
+
+    const allDates = [...new Set([
+      ...Object.keys(actualMap),
+      ...Object.keys(backtestMap),
+      ...Object.keys(futureMap),
+    ])].sort()
+
     return allDates.map((date) => ({
       date,
       Actual:   actualMap[date]   ?? null,
-      Forecast: forecastMap[date] ?? null,
+      Backtest: backtestMap[date] ?? null,
+      Future:   futureMap[date]   ?? null,
     }))
-  }, [filteredAvf])
+  }, [filteredAvf, filteredBacktest, filtered])
 
-  const forecastStartDate = useMemo(
-    () => avfChartData.find((d) => d.Forecast !== null && d.Actual === null)?.date ?? null,
-    [avfChartData]
+  const futureStartDate = useMemo(
+    () => combinedChartData.find((d) => d.Future !== null)?.date ?? null,
+    [combinedChartData]
   )
 
   // ── Forecast comparison chart (all model lines) ───────
@@ -139,19 +185,19 @@ export default function ForecastResults() {
       [...filtered]
         .sort((a, b) => a.Forecast_Date.localeCompare(b.Forecast_Date))
         .map((d) => ({
-          date:              fmtDateShort(d.Forecast_Date),
-          Naive:             d.Naive_Forecast,
-          'Moving Avg':      d.Moving_Average_Forecast,
-          'Seasonal Naive':  d.Seasonal_Naive_Forecast,
-          Trend:             d.Trend_Forecast,
-          'Linear Reg':      d.Linear_Regression_Forecast,
-          'Random Forest':   d.Random_Forest_Forecast,
-          Ensemble:          d.Enhanced_Ensemble_Forecast,
+          date:             fmtDateShort(d.Forecast_Date),
+          Naive:            d.Naive_Forecast,
+          'Moving Avg':     d.Moving_Average_Forecast,
+          'Seasonal Naive': d.Seasonal_Naive_Forecast,
+          Trend:            d.Trend_Forecast,
+          'Linear Reg':     d.Linear_Regression_Forecast,
+          'Random Forest':  d.Random_Forest_Forecast,
+          Ensemble:         d.Enhanced_Ensemble_Forecast,
         })),
     [filtered]
   )
 
-  // ── Model accuracy ranking (sorted best first) ────────
+  // ── Model accuracy ranking ────────────────────────────
   const modelAccuracy = useMemo(
     () =>
       [...filteredMetrics]
@@ -162,7 +208,7 @@ export default function ForecastResults() {
   const topModel    = modelAccuracy[0] ?? null
   const otherModels = modelAccuracy.slice(1, 4)
 
-  // ── Table with stats for status badges ────────────────
+  // ── Forecast Output table ─────────────────────────────
   const { mean: tblMean, std: tblStd } = useMemo(() => {
     if (filtered.length === 0) return { mean: 0, std: 1 }
     const mean = filtered.reduce((s, d) => s + (d.Enhanced_Ensemble_Forecast || 0), 0) / filtered.length
@@ -189,6 +235,15 @@ export default function ForecastResults() {
   const safePage   = Math.min(page, totalPages)
   const pageRows   = tableData.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
+  // ── Backtest table ────────────────────────────────────
+  const backtestTableData = useMemo(
+    () => [...filteredBacktest].sort((a, b) => a.Backtest_Date.localeCompare(b.Backtest_Date)),
+    [filteredBacktest]
+  )
+  const btTotalPages = Math.max(1, Math.ceil(backtestTableData.length / PAGE_SIZE))
+  const safeBtPage   = Math.min(btPage, btTotalPages)
+  const btPageRows   = backtestTableData.slice((safeBtPage - 1) * PAGE_SIZE, safeBtPage * PAGE_SIZE)
+
   // ── Loading ───────────────────────────────────────────
   if (loading) {
     return (
@@ -200,6 +255,8 @@ export default function ForecastResults() {
       </div>
     )
   }
+
+  const accuracyLabel = mapeLabel(backtestMAPE)
 
   // ── Render ────────────────────────────────────────────
   return (
@@ -220,10 +277,30 @@ export default function ForecastResults() {
       {/* ── KPI row ────────────────────────────────────── */}
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {([
-          { label: 'Forecast Frequency',     icon: 'update',     value: freq,                                                         sub: 'Reporting cycle' },
-          { label: 'Forecast Horizon',        icon: 'event_note', value: horizon.toString(),                                            sub: 'Weeks ahead' },
-          { label: 'Avg Ensemble Forecast',   icon: 'insights',   value: fmtNum(avgEnsemble),                                           sub: 'Units per week' },
-          { label: 'Total Forecasted Sales',  icon: 'analytics',  value: totalEnsemble.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), sub: 'Aggregate units' },
+          {
+            label: 'Backtest MAE',
+            icon: 'target',
+            value: fmtNum(backtestMAE),
+            sub: 'Avg absolute error (8-week holdout)',
+          },
+          {
+            label: 'Backtest MAPE',
+            icon: 'percent',
+            value: `${fmtNum(backtestMAPE)}%`,
+            sub: 'Avg % error vs actual sales',
+          },
+          {
+            label: 'Forecast Horizon',
+            icon: 'event_note',
+            value: `${horizon}`,
+            sub: 'Weeks ahead',
+          },
+          {
+            label: 'Total Forecasted Sales',
+            icon: 'analytics',
+            value: totalEnsemble.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+            sub: 'Aggregate ensemble units',
+          },
         ] as const).map(({ label, icon, value, sub }) => (
           <div key={label} className="glass-card p-6 rounded-xl flex flex-col justify-between h-[140px]">
             <div className="flex justify-between items-start">
@@ -245,12 +322,9 @@ export default function ForecastResults() {
       {/* ── Filters row ────────────────────────────────── */}
       <section className="glass-card p-4 rounded-xl flex flex-wrap gap-3 items-center">
 
-        {/* Store pill */}
         <div className="flex items-center gap-2 px-4 py-2 bg-white/40 rounded-lg border border-on-secondary-fixed/5">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 17 }}>store</span>
-          <span className="font-mono text-[11px] font-medium tracking-wide uppercase text-on-surface-variant/60">
-            Store:
-          </span>
+          <span className="font-mono text-[11px] font-medium tracking-wide uppercase text-on-surface-variant/60">Store:</span>
           <select
             value={storeFilter}
             onChange={(e) => setStore(e.target.value)}
@@ -260,12 +334,9 @@ export default function ForecastResults() {
           </select>
         </div>
 
-        {/* Product pill */}
         <div className="flex items-center gap-2 px-4 py-2 bg-white/40 rounded-lg border border-on-secondary-fixed/5">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 17 }}>inventory_2</span>
-          <span className="font-mono text-[11px] font-medium tracking-wide uppercase text-on-surface-variant/60">
-            Product:
-          </span>
+          <span className="font-mono text-[11px] font-medium tracking-wide uppercase text-on-surface-variant/60">Product:</span>
           <select
             value={productFilter}
             onChange={(e) => setProduct(e.target.value)}
@@ -275,12 +346,9 @@ export default function ForecastResults() {
           </select>
         </div>
 
-        {/* Frequency pill */}
         <div className="flex items-center gap-2 px-4 py-2 bg-white/40 rounded-lg border border-on-secondary-fixed/5">
           <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 17 }}>schedule</span>
-          <span className="font-mono text-[11px] font-medium tracking-wide uppercase text-on-surface-variant/60">
-            Frequency:
-          </span>
+          <span className="font-mono text-[11px] font-medium tracking-wide uppercase text-on-surface-variant/60">Frequency:</span>
           <select
             value={freqFilter}
             onChange={(e) => setFreq(e.target.value)}
@@ -290,7 +358,6 @@ export default function ForecastResults() {
           </select>
         </div>
 
-        {/* Action buttons */}
         <div className="ml-auto flex gap-3 flex-wrap">
           <button
             className="px-6 py-2 bg-primary text-on-primary rounded-full font-bold text-sm transition-transform active:scale-95"
@@ -304,43 +371,53 @@ export default function ForecastResults() {
         </div>
       </section>
 
-      {/* ── Charts (bento 8/4) ─────────────────────────── */}
+      {/* ── Charts (8 / 4 bento) ──────────────────────── */}
       <section className="grid grid-cols-12 gap-6">
 
-        {/* Actual vs Forecast (8/12) */}
+        {/* Combined chart (8/12) */}
         <div className="col-span-12 lg:col-span-8 glass-card p-8 rounded-2xl">
           <div className="flex justify-between items-end mb-6">
             <div>
-              <h3 className="text-[18px] font-semibold leading-6 mb-1">Actual vs Forecast Sales</h3>
+              <h3 className="text-[18px] font-semibold leading-6 mb-1">
+                Actual, Backtested Forecast &amp; Future Forecast
+              </h3>
               <p className="text-on-surface-variant/70 text-xs">
-                Historical performance compared to predictive ensemble modeling
+                Holdout validation against the last 8 weeks, plus 8-week forward projection
               </p>
             </div>
-            <div className="flex gap-5">
+            <div className="flex gap-5 flex-wrap justify-end">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-secondary inline-block" />
                 <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant">Actual</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-primary-container inline-block" />
-                <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant">Forecast</span>
+                <span
+                  className="inline-block"
+                  style={{ width: 20, height: 3, background: '#E76D57',
+                    backgroundImage: 'repeating-linear-gradient(90deg,#E76D57 0,#E76D57 8px,transparent 8px,transparent 12px)' }}
+                />
+                <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant">Backtest</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-5 inline-block" style={{ height: 3, background: '#E76D57', borderRadius: 2 }} />
+                <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant">Future</span>
               </div>
             </div>
           </div>
 
-          {avfChartData.length === 0 ? (
+          {combinedChartData.length === 0 ? (
             <div className="h-[360px] bg-white/10 rounded-lg border border-on-secondary-fixed/5 flex items-center justify-center text-sm text-on-surface-variant/50">
               No data for the selected filters.
             </div>
           ) : (
             <div className="h-[360px] w-full bg-white/10 rounded-lg border border-on-secondary-fixed/5">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={avfChartData} margin={{ top: 28, right: 20, left: 0, bottom: 28 }}>
+                <LineChart data={combinedChartData} margin={{ top: 28, right: 20, left: 0, bottom: 28 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(32,19,21,0.05)" vertical={false} />
 
-                  {/* Forecast region shading */}
-                  {forecastStartDate && (
-                    <ReferenceArea x1={forecastStartDate} fill="#E76D57" fillOpacity={0.05} />
+                  {/* Future forecast shaded region */}
+                  {futureStartDate && (
+                    <ReferenceArea x1={futureStartDate} fill="#E76D57" fillOpacity={0.05} />
                   )}
 
                   <XAxis
@@ -359,15 +436,15 @@ export default function ForecastResults() {
                   />
                   <Tooltip content={<ChartTooltip />} />
 
-                  {/* Forecast start dashed line */}
-                  {forecastStartDate && (
+                  {/* Future forecast start marker */}
+                  {futureStartDate && (
                     <ReferenceLine
-                      x={forecastStartDate}
+                      x={futureStartDate}
                       stroke="#E76D57"
                       strokeDasharray="8 4"
                       strokeWidth={2}
                       label={{
-                        value: 'FORECAST START',
+                        value: 'FUTURE FORECAST START',
                         position: 'insideTopRight',
                         fill: '#E76D57',
                         fontSize: 9,
@@ -377,21 +454,34 @@ export default function ForecastResults() {
                     />
                   )}
 
-                  {/* Actual — carafe */}
+                  {/* Actual Sales — carafe solid */}
                   <Line
                     type="monotone"
                     dataKey="Actual"
+                    name="Actual Sales"
                     stroke="#56382D"
                     strokeWidth={3}
                     dot={false}
                     connectNulls={false}
                   />
-                  {/* Forecast — salmon */}
+                  {/* Backtested Ensemble — salmon dashed */}
                   <Line
                     type="monotone"
-                    dataKey="Forecast"
+                    dataKey="Backtest"
+                    name="Backtested Ensemble"
                     stroke="#E76D57"
-                    strokeWidth={4}
+                    strokeWidth={2.5}
+                    strokeDasharray="8 4"
+                    dot={false}
+                    connectNulls={false}
+                  />
+                  {/* Future Ensemble — salmon solid */}
+                  <Line
+                    type="monotone"
+                    dataKey="Future"
+                    name="Future Ensemble"
+                    stroke="#E76D57"
+                    strokeWidth={3.5}
                     dot={false}
                     connectNulls={false}
                   />
@@ -401,103 +491,114 @@ export default function ForecastResults() {
           )}
         </div>
 
-        {/* Forecast Comparison (4/12) */}
-        <div className="col-span-12 lg:col-span-4 glass-card p-8 rounded-2xl flex flex-col">
-          <div className="mb-4">
-            <h3 className="text-[18px] font-semibold leading-6 mb-1">Forecast Comparison</h3>
-            <p className="text-on-surface-variant/70 text-xs">Variance across model architectures</p>
+        {/* Right column: Forecast Comparison + Backtest Accuracy (4/12) */}
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+
+          {/* Forecast Comparison */}
+          <div className="glass-card p-6 rounded-2xl flex flex-col flex-1">
+            <div className="mb-4">
+              <h3 className="text-[16px] font-semibold leading-6 mb-1">Forecast Comparison</h3>
+              <p className="text-on-surface-variant/70 text-xs">Variance across model architectures</p>
+            </div>
+
+            {modelChartData.length > 0 ? (
+              <div className="mb-3" style={{ height: 150 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={modelChartData} margin={{ top: 5, right: 5, left: -28, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke="rgba(32,19,21,0.04)" vertical={false} />
+                    <XAxis dataKey="date" hide />
+                    <YAxis
+                      tick={{ fill: '#57423e', fontSize: 9, opacity: 0.4 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: number) => v.toFixed(0)}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    {(['Naive', 'Moving Avg', 'Seasonal Naive', 'Trend', 'Linear Reg', 'Random Forest'] as const).map((m) => (
+                      <Line key={m} type="monotone" dataKey={m} stroke="#56382D"
+                        strokeWidth={1} strokeOpacity={0.22} dot={false} />
+                    ))}
+                    <Line type="monotone" dataKey="Ensemble" stroke="#E76D57"
+                      strokeWidth={3} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="h-[150px] flex items-center justify-center text-xs text-on-surface-variant/40 mb-3">
+                No forecast data
+              </div>
+            )}
+
+            <div className="space-y-1.5 flex-1">
+              {modelAccuracy.length === 0 ? (
+                <p className="text-xs text-on-surface-variant/50 text-center py-4">No metrics data</p>
+              ) : (
+                <>
+                  {topModel && (
+                    <div className="flex justify-between items-center bg-primary-container/10 p-2.5 rounded-lg border border-primary/20">
+                      <span className="font-bold text-primary flex items-center gap-2 text-sm">
+                        <span className="w-2 h-2 rounded-full bg-primary inline-block" />
+                        {topModel.model}
+                      </span>
+                      <span className="font-mono text-[11px] font-medium tracking-wide text-on-surface">
+                        {topModel.accuracy.toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                  {otherModels.map((m) => (
+                    <div key={m.model} className="flex justify-between items-center px-2.5 py-1 text-on-surface-variant/60 text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-on-surface-variant/30 inline-block" />
+                        {m.model}
+                      </span>
+                      <span className="font-mono text-[11px] font-medium tracking-wide">
+                        {m.accuracy.toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
 
-          {/* Mini multi-model chart */}
-          {modelChartData.length > 0 ? (
-            <div className="mb-4" style={{ height: 180 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={modelChartData} margin={{ top: 5, right: 5, left: -28, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(32,19,21,0.04)" vertical={false} />
-                  <XAxis dataKey="date" hide />
-                  <YAxis
-                    tick={{ fill: '#57423e', fontSize: 9, opacity: 0.4 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v: number) => v.toFixed(0)}
-                  />
-                  <Tooltip content={<ChartTooltip />} />
-                  {(['Naive', 'Moving Avg', 'Seasonal Naive', 'Trend', 'Linear Reg', 'Random Forest'] as const).map((m) => (
-                    <Line
-                      key={m}
-                      type="monotone"
-                      dataKey={m}
-                      stroke="#56382D"
-                      strokeWidth={1}
-                      strokeOpacity={0.22}
-                      dot={false}
-                    />
-                  ))}
-                  <Line
-                    type="monotone"
-                    dataKey="Ensemble"
-                    stroke="#E76D57"
-                    strokeWidth={3}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+          {/* Backtest Accuracy panel */}
+          <div className="glass-card p-6 rounded-2xl" style={{ borderLeft: '4px solid #E76D57' }}>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-primary" style={{ fontSize: 20 }}>fact_check</span>
+              <h3 className="text-[16px] font-semibold leading-6">Backtest Accuracy</h3>
             </div>
-          ) : (
-            <div className="h-[180px] flex items-center justify-center text-xs text-on-surface-variant/40 mb-4">
-              No forecast data
-            </div>
-          )}
 
-          {/* Accuracy rankings */}
-          <div className="space-y-2 flex-1">
-            {modelAccuracy.length === 0 ? (
-              <p className="text-xs text-on-surface-variant/50 text-center py-4">No metrics data</p>
-            ) : (
-              <>
-                {topModel && (
-                  <div className="flex justify-between items-center bg-primary-container/10 p-3 rounded-lg border border-primary/20">
-                    <span className="font-bold text-primary flex items-center gap-2 text-sm">
-                      <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-                      {topModel.model}
-                    </span>
-                    <span className="font-mono text-[11px] font-medium tracking-wide text-on-surface">
-                      {topModel.accuracy.toFixed(1)}% Accuracy
-                    </span>
-                  </div>
-                )}
-                {otherModels.map((m) => (
-                  <div key={m.model} className="flex justify-between items-center px-3 py-1 text-on-surface-variant/60 text-sm">
-                    <span className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-on-surface-variant/30 inline-block" />
-                      {m.model}
-                    </span>
-                    <span className="font-mono text-[11px] font-medium tracking-wide">
-                      {m.accuracy.toFixed(1)}%
-                    </span>
-                  </div>
-                ))}
-              </>
-            )}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-white/30 rounded-xl p-3 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-on-surface-variant/60 mb-1">Avg Abs Error</p>
+                <p className="text-[20px] font-bold text-on-surface font-mono">{fmtNum(backtestMAE)}</p>
+                <p className="text-[10px] text-on-surface-variant/50 mt-0.5">units</p>
+              </div>
+              <div className="bg-white/30 rounded-xl p-3 text-center">
+                <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-on-surface-variant/60 mb-1">Avg % Error</p>
+                <p className="text-[20px] font-bold text-on-surface font-mono">{fmtNum(backtestMAPE)}%</p>
+                <p className={`text-[10px] mt-0.5 ${accuracyLabel.cls}`}>{accuracyLabel.text}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-on-surface-variant/60 leading-relaxed">
+              The backtest compares the model's predictions against the last 8 weeks of known actual sales.
+              Lower MAE and MAPE indicate a more reliable forecast.
+            </p>
           </div>
         </div>
       </section>
 
       {/* ── Forecast Output Details table ──────────────── */}
       <section className="glass-card rounded-2xl overflow-hidden">
-
-        {/* Table header */}
         <div className="p-8 border-b border-on-secondary-fixed/5 flex flex-wrap gap-4 justify-between items-center">
           <div>
             <h3 className="text-[18px] font-semibold leading-6 mb-1">Forecast Output Details</h3>
-            <p className="text-on-surface-variant/70 text-xs">Raw forecast values and confidence intervals by date</p>
+            <p className="text-on-surface-variant/70 text-xs">Future ensemble forecast values by date</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <span
-                className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40"
-                style={{ fontSize: 16 }}
-              >
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/40" style={{ fontSize: 16 }}>
                 search
               </span>
               <input
@@ -514,16 +615,12 @@ export default function ForecastResults() {
           </div>
         </div>
 
-        {/* Table */}
         <div className="overflow-x-auto scroll-hide">
           <table className="w-full text-left border-collapse">
             <thead className="bg-surface-container/30">
               <tr>
                 {['Store ID', 'Product ID', 'Frequency', 'Forecast Date', 'Ensemble Value', 'Status'].map((col) => (
-                  <th
-                    key={col}
-                    className="px-8 py-4 text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant/60 whitespace-nowrap"
-                  >
+                  <th key={col} className="px-8 py-4 text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant/60 whitespace-nowrap">
                     {col}
                   </th>
                 ))}
@@ -540,22 +637,12 @@ export default function ForecastResults() {
                 pageRows.map((row, i) => {
                   const s = STATUS_STYLE[row.status] ?? STATUS_STYLE['Medium Confidence']
                   return (
-                    <tr key={i} className="hover:bg-primary-container/5 transition-colors group">
-                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">
-                        {row.Store_id}
-                      </td>
-                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">
-                        {row.Product_id}
-                      </td>
-                      <td className="px-8 py-4 text-sm text-on-surface-variant/70">
-                        {row.Forecast_Frequency}
-                      </td>
-                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">
-                        {fmtDateShort(row.Forecast_Date)}
-                      </td>
-                      <td className="px-8 py-4 font-bold text-primary">
-                        {fmtNum(row.Enhanced_Ensemble_Forecast)}
-                      </td>
+                    <tr key={i} className="hover:bg-primary-container/5 transition-colors">
+                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">{row.Store_id}</td>
+                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">{row.Product_id}</td>
+                      <td className="px-8 py-4 text-sm text-on-surface-variant/70">{row.Forecast_Frequency}</td>
+                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">{fmtDateShort(row.Forecast_Date)}</td>
+                      <td className="px-8 py-4 font-bold text-primary">{fmtNum(row.Enhanced_Ensemble_Forecast)}</td>
                       <td className="px-8 py-4">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${s.pill}`}>
                           {row.status}
@@ -569,7 +656,6 @@ export default function ForecastResults() {
           </table>
         </div>
 
-        {/* Table footer */}
         <div className="px-8 py-6 bg-surface-container/20 border-t border-on-secondary-fixed/5 flex justify-between items-center">
           <span className="text-xs text-on-surface-variant/60">
             Showing {pageRows.length} of {tableData.length} forecast intervals
@@ -585,6 +671,92 @@ export default function ForecastResults() {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
+              className="p-2 rounded-lg border border-on-secondary-fixed/5 hover:bg-white/40 disabled:opacity-20 transition-all"
+            >
+              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>chevron_right</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Backtest Details table ──────────────────────── */}
+      <section className="glass-card rounded-2xl overflow-hidden">
+        <div className="p-8 border-b border-on-secondary-fixed/5 flex flex-wrap gap-4 justify-between items-center">
+          <div>
+            <h3 className="text-[18px] font-semibold leading-6 mb-1">Backtest Details</h3>
+            <p className="text-on-surface-variant/70 text-xs">
+              Ensemble predictions vs actual sales over the 8-week holdout window
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-secondary-container/40 text-on-secondary-container">
+              {filteredBacktest.length} rows
+            </span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto scroll-hide">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-surface-container/30">
+              <tr>
+                {['Backtest Date', 'Actual Sales', 'Ensemble Backtest', 'Absolute Error', '% Error'].map((col) => (
+                  <th key={col} className="px-8 py-4 text-[11px] font-bold tracking-[0.05em] uppercase text-on-surface-variant/60 whitespace-nowrap">
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-on-secondary-fixed/5">
+              {btPageRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-8 py-12 text-center text-sm text-on-surface-variant/50">
+                    No backtest data for the selected filters.
+                  </td>
+                </tr>
+              ) : (
+                btPageRows.map((row, i) => {
+                  const pctErr = row.Ensemble_Percent_Error || 0
+                  const errCls = pctErr < 15 ? 'text-tertiary' : pctErr < 25 ? 'text-secondary' : 'text-error'
+                  return (
+                    <tr key={i} className="hover:bg-primary-container/5 transition-colors">
+                      <td className="px-8 py-4 font-mono text-[12px] font-medium tracking-wide text-on-surface">
+                        {fmtDateShort(row.Backtest_Date)}
+                      </td>
+                      <td className="px-8 py-4 font-mono text-[12px] font-bold text-on-surface">
+                        {fmtNum(row.Actual_Sales)}
+                      </td>
+                      <td className="px-8 py-4 font-mono text-[12px] font-medium text-primary">
+                        {fmtNum(row.Enhanced_Ensemble_Backtest)}
+                      </td>
+                      <td className="px-8 py-4 font-mono text-[12px] font-medium text-on-surface-variant">
+                        {fmtNum(row.Ensemble_Absolute_Error)}
+                      </td>
+                      <td className={`px-8 py-4 font-mono text-[12px] font-bold ${errCls}`}>
+                        {fmtNum(pctErr)}%
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="px-8 py-6 bg-surface-container/20 border-t border-on-secondary-fixed/5 flex justify-between items-center">
+          <span className="text-xs text-on-surface-variant/60">
+            Showing {btPageRows.length} of {backtestTableData.length} backtest intervals
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setBtPage((p) => Math.max(1, p - 1))}
+              disabled={safeBtPage === 1}
+              className="p-2 rounded-lg border border-on-secondary-fixed/5 hover:bg-white/40 disabled:opacity-20 transition-all"
+            >
+              <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>chevron_left</span>
+            </button>
+            <button
+              onClick={() => setBtPage((p) => Math.min(btTotalPages, p + 1))}
+              disabled={safeBtPage === btTotalPages}
               className="p-2 rounded-lg border border-on-secondary-fixed/5 hover:bg-white/40 disabled:opacity-20 transition-all"
             >
               <span className="material-symbols-outlined text-on-surface-variant" style={{ fontSize: 18 }}>chevron_right</span>

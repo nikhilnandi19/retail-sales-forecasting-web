@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import type { SalesOverview, ForecastOutput, ModelMetrics, ActualVsForecast } from '../types'
+import type { SalesOverview, ForecastOutput, ModelMetrics, ActualVsForecast, BacktestOutput } from '../types'
 
 function loadCSV<T>(path: string): Promise<T[]> {
   return new Promise((resolve, reject) => {
@@ -25,3 +25,6 @@ export const loadModelMetrics = () =>
 
 export const loadActualVsForecast = () =>
   loadCSV<ActualVsForecast>('/data/dashboard_actual_vs_forecast.csv')
+
+export const loadBacktestOutput = () =>
+  loadCSV<BacktestOutput>('/data/dashboard_backtest_output.csv')
