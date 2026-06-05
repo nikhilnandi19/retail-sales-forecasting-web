@@ -197,16 +197,21 @@ export default function ForecastResults() {
     [filtered]
   )
 
-  // ── Model accuracy ranking ────────────────────────────
-  const modelAccuracy = useMemo(
-    () =>
-      [...filteredMetrics]
-        .map((d) => ({ model: d.Model, accuracy: Math.max(0, 100 - d.MAPE) }))
-        .sort((a, b) => b.accuracy - a.accuracy),
-    [filteredMetrics]
-  )
-  const topModel    = modelAccuracy[0] ?? null
-  const otherModels = modelAccuracy.slice(1, 4)
+  // ── Forecast comparison: avg value per model from forecast CSV ───
+  const MODEL_KEYS = [
+    { model: 'Enhanced Ensemble', key: 'Enhanced_Ensemble_Forecast' as keyof ForecastOutput },
+    { model: 'Random Forest',     key: 'Random_Forest_Forecast'     as keyof ForecastOutput },
+    { model: 'Seasonal Naive',    key: 'Seasonal_Naive_Forecast'    as keyof ForecastOutput },
+    { model: 'Linear Regression', key: 'Linear_Regression_Forecast' as keyof ForecastOutput },
+  ] as const
+
+  const modelForecastAvg = useMemo(() => {
+    if (filtered.length === 0) return []
+    return MODEL_KEYS.map(({ model, key }) => ({
+      model,
+      avg: filtered.reduce((s, d) => s + ((d[key] as number) || 0), 0) / filtered.length,
+    }))
+  }, [filtered])
 
   // ── Forecast Output table ─────────────────────────────
   const { mean: tblMean, std: tblStd } = useMemo(() => {
@@ -270,7 +275,7 @@ export default function ForecastResults() {
           <span className="text-on-surface-variant">Forecast Results</span>
         </div>
         <h1 className="text-[40px] font-bold leading-[48px] tracking-[-0.02em] text-on-background">
-          Retail Sales Forecast: Q3 2026
+          Retail Sales Forecast: 8-Week Horizon
         </h1>
       </section>
 
@@ -530,29 +535,29 @@ export default function ForecastResults() {
             )}
 
             <div className="space-y-1.5 flex-1">
-              {modelAccuracy.length === 0 ? (
-                <p className="text-xs text-on-surface-variant/50 text-center py-4">No metrics data</p>
+              {modelForecastAvg.length === 0 ? (
+                <p className="text-xs text-on-surface-variant/50 text-center py-4">No forecast data</p>
               ) : (
                 <>
-                  {topModel && (
-                    <div className="flex justify-between items-center bg-primary-container/10 p-2.5 rounded-lg border border-primary/20">
-                      <span className="font-bold text-primary flex items-center gap-2 text-sm">
-                        <span className="w-2 h-2 rounded-full bg-primary inline-block" />
-                        {topModel.model}
-                      </span>
-                      <span className="font-mono text-[11px] font-medium tracking-wide text-on-surface">
-                        {topModel.accuracy.toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-                  {otherModels.map((m) => (
-                    <div key={m.model} className="flex justify-between items-center px-2.5 py-1 text-on-surface-variant/60 text-sm">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-on-surface-variant/30 inline-block" />
+                  <p className="text-[10px] font-bold uppercase tracking-[0.05em] text-on-surface-variant/50 mb-2">
+                    Avg Forecast (units/week)
+                  </p>
+                  {modelForecastAvg.map((m, i) => (
+                    <div
+                      key={m.model}
+                      className={[
+                        'flex justify-between items-center p-2.5 rounded-lg text-sm',
+                        i === 0
+                          ? 'bg-primary-container/10 border border-primary/20'
+                          : 'px-2.5 py-1 text-on-surface-variant/60',
+                      ].join(' ')}
+                    >
+                      <span className={`flex items-center gap-2 ${i === 0 ? 'font-bold text-primary' : ''}`}>
+                        <span className={`w-2 h-2 rounded-full inline-block ${i === 0 ? 'bg-primary' : 'bg-on-surface-variant/30'}`} />
                         {m.model}
                       </span>
-                      <span className="font-mono text-[11px] font-medium tracking-wide">
-                        {m.accuracy.toFixed(1)}%
+                      <span className={`font-mono text-[11px] font-medium tracking-wide ${i === 0 ? 'text-on-surface' : ''}`}>
+                        {fmtNum(m.avg)}
                       </span>
                     </div>
                   ))}
