@@ -78,9 +78,9 @@ const FORECAST_COLS: ColDef<ForecastOutput>[] = [
 ]
 
 export default function ForecastResults({ forecastData, avfData }: Props) {
-  const [storeFilter, setStoreFilter] = useState('All')
-  const [productFilter, setProductFilter] = useState('All')
-  const [freqFilter, setFreqFilter] = useState('All')
+  const [storeFilter, setStoreFilter] = useState('S001')
+  const [productFilter, setProductFilter] = useState('P001')
+  const [freqFilter, setFreqFilter] = useState('weekly')
 
   const stores = useMemo(() => ['All', ...unique(forecastData.map((d) => d.Store_id)).sort()], [forecastData])
   const products = useMemo(() => ['All', ...unique(forecastData.map((d) => d.Product_id)).sort()], [forecastData])
@@ -105,22 +105,34 @@ export default function ForecastResults({ forecastData, avfData }: Props) {
       : 0
   const totalEnsemble = filtered.reduce((s, d) => s + (d.Enhanced_Ensemble_Forecast || 0), 0)
 
-  // Actual vs forecast line chart data
+  // Filter avfData to match the selected store / product / frequency
+  const filteredAvf = useMemo(
+    () =>
+      avfData.filter(
+        (d) =>
+          (storeFilter === 'All' || d.Store_id === storeFilter) &&
+          (productFilter === 'All' || d.Product_id === productFilter) &&
+          (freqFilter === 'All' || d.Forecast_Frequency === freqFilter)
+      ),
+    [avfData, storeFilter, productFilter, freqFilter]
+  )
+
+  // Actual vs forecast line chart data — built from the filtered avf slice
   const avfChartData = useMemo(() => {
     const actualMap: Record<string, number> = {}
     const forecastMap: Record<string, number> = {}
-    avfData.forEach((d) => {
+    filteredAvf.forEach((d) => {
       const key = fmtDateShort(d.Date)
       if (d.Type === 'Actual') actualMap[key] = d.Sales
       else forecastMap[key] = d.Sales
     })
-    const allDates = [...new Set(avfData.map((d) => fmtDateShort(d.Date)))].sort()
+    const allDates = [...new Set(filteredAvf.map((d) => fmtDateShort(d.Date)))].sort()
     return allDates.map((date) => ({
       date,
       Actual: actualMap[date] ?? null,
       Forecast: forecastMap[date] ?? null,
     }))
-  }, [avfData])
+  }, [filteredAvf])
 
   // Forecast comparison data
   const modelChartData = useMemo(
@@ -170,7 +182,17 @@ export default function ForecastResults({ forecastData, avfData }: Props) {
         </div>
       </div>
 
-      {/* Two charts */}
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-2)' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>—</div>
+          <div style={{ fontSize: 14 }}>No forecast data for the selected filters.</div>
+          <div style={{ fontSize: 12, marginTop: 6, color: 'var(--text-3)' }}>Try a different Store / Product / Frequency combination.</div>
+        </div>
+      )}
+
+      {/* Two charts + table — hidden when no data */}
+      {filtered.length > 0 && <>
       <div className="two-col">
         {/* Actual vs Forecast */}
         <div className="card">
@@ -270,6 +292,7 @@ export default function ForecastResults({ forecastData, avfData }: Props) {
         defaultSortDir="asc"
         pageSize={10}
       />
+      </>}
     </div>
   )
 }

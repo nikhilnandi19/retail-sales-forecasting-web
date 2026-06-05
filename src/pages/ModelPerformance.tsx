@@ -96,9 +96,9 @@ function HBarChart({
 }
 
 export default function ModelPerformance({ metricsData }: Props) {
-  const [storeFilter, setStoreFilter] = useState('All')
-  const [productFilter, setProductFilter] = useState('All')
-  const [freqFilter, setFreqFilter] = useState('All')
+  const [storeFilter, setStoreFilter] = useState('S001')
+  const [productFilter, setProductFilter] = useState('P001')
+  const [freqFilter, setFreqFilter] = useState('weekly')
 
   const stores = useMemo(() => ['All', ...unique(metricsData.map((d) => d.Store_id)).sort()], [metricsData])
   const products = useMemo(() => ['All', ...unique(metricsData.map((d) => d.Product_id)).sort()], [metricsData])
@@ -135,6 +135,16 @@ export default function ModelPerformance({ metricsData }: Props) {
 
   return (
     <div className="page-content">
+      {/* Empty state */}
+      {filtered.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-2)' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>—</div>
+          <div style={{ fontSize: 14 }}>No model metrics for the selected filters.</div>
+          <div style={{ fontSize: 12, marginTop: 6, color: 'var(--text-3)' }}>Try a different Store / Product / Frequency combination.</div>
+        </div>
+      )}
+
+      {filtered.length > 0 && <>
       {/* KPI Cards row — 5 cols: best-model spans 2, then 3 single KPI cards */}
       <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
         {/* Best Model card spans 2 columns */}
@@ -218,6 +228,7 @@ export default function ModelPerformance({ metricsData }: Props) {
         defaultSortDir="asc"
         pageSize={15}
       />
+      </>}
     </div>
   )
 }

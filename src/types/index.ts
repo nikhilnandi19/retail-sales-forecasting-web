@@ -17,7 +17,6 @@ export interface ForecastOutput {
   Moving_Average_Forecast: number
   Seasonal_Naive_Forecast: number
   Trend_Forecast: number
-  Ensemble_Forecast: number
   Linear_Regression_Forecast: number
   Random_Forest_Forecast: number
   Enhanced_Ensemble_Forecast: number
@@ -36,6 +35,9 @@ export interface ModelMetrics {
 }
 
 export interface ActualVsForecast {
+  Store_id: string
+  Product_id: string
+  Forecast_Frequency: string
   Date: string
   Sales: number
   Type: string
