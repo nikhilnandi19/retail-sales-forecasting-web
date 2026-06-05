@@ -9,20 +9,23 @@ export default function App() {
   const [tab, setTab] = useState(0)
 
   return (
-    <div className="min-h-screen bg-background font-sans text-on-surface flex flex-col">
+    <div className="min-h-screen font-sans text-on-surface flex flex-col">
 
       {/* ── Atmospheric background blobs ─────────────────────── */}
+      {/* Salmon blob — top-left */}
       <div
-        className="bg-blob bg-primary-container animate-blob"
-        style={{ top: '-192px', left: '-192px', width: '800px', height: '800px' }}
+        className="bg-blob animate-blob"
+        style={{ background: '#E76D57', top: '-160px', left: '-160px', width: '700px', height: '700px', opacity: 0.2 }}
       />
+      {/* Carafe blob — bottom-right */}
       <div
-        className="bg-blob bg-secondary animate-blob"
-        style={{ top: '50%', right: '-96px', width: '700px', height: '700px', animationDelay: '-5s' }}
+        className="bg-blob animate-blob"
+        style={{ background: '#56382D', bottom: '-80px', right: '-160px', width: '800px', height: '800px', opacity: 0.15, animationDelay: '-5s' }}
       />
+      {/* Tertiary blob — mid-left */}
       <div
-        className="bg-blob bg-tertiary-container animate-blob"
-        style={{ bottom: '-96px', left: '33%', width: '400px', height: '400px', animationDelay: '-10s' }}
+        className="bg-blob animate-blob"
+        style={{ background: '#79564a', top: '40%', left: '20%', width: '600px', height: '600px', opacity: 0.12, animationDelay: '-10s' }}
       />
 
       {/* ── Sticky navigation ────────────────────────────────── */}

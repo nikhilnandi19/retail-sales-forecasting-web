@@ -6,9 +6,17 @@
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
-  html, body, #root {
+  /* Background ONLY on html — lets position:fixed z-index:-1 blobs paint
+     above the canvas background but below all other content.             */
+  html {
     min-height: 100vh;
-    background-color: #fef9f1;
+    background-color: #f8f3eb; /* surface-container-low — matches Stitch */
+  }
+
+  /* body and #root are transparent so they don't cover the blobs */
+  body, #root {
+    min-height: 100vh;
+    background: transparent;
   }
 
   body {
@@ -32,11 +40,11 @@
 /* ─── Atmospheric background blobs ──────────────────────── */
 .bg-blob {
   position: fixed;
-  z-index: -1;
-  filter: blur(100px);
-  opacity: 0.12;
+  z-index: -1;       /* above html canvas, below all content */
+  filter: blur(80px);
   border-radius: 50%;
   pointer-events: none;
+  /* opacity set per-blob inline so each has its own strength */
 }
 
 @keyframes pulse-soft {
